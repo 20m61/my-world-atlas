@@ -19,6 +19,7 @@ const useAtlasStore = create((set, get) => ({
     
     try {
       const visitedPlaces = await dbService.getAllVisitedPlaces();
+      console.log('データベースから訪問済みの場所を取得しました:', visitedPlaces);
       set({ visitedPlaces, isLoading: false });
     } catch (error) {
       logError(error, { action: 'initializeStore' });
@@ -45,8 +46,11 @@ const useAtlasStore = create((set, get) => ({
   markPlaceAsVisited: withErrorHandling(async (placeData) => {
     const { uniqueId, placeName, adminLevel, countryCodeISO, regionCodeISO } = placeData;
     
+    console.log('訪問済みにマークします:', placeData);
+    
     if (!uniqueId || !placeName || !adminLevel) {
       const errorMsg = '必須情報が不足しています';
+      console.error(errorMsg, placeData);
       set({ 
         error: errorMsg,
         toast: { show: true, message: errorMsg, type: 'error' }
@@ -63,9 +67,11 @@ const useAtlasStore = create((set, get) => ({
         placeName,
         adminLevel,
         dateMarked: new Date().toISOString(),
-        countryCodeISO: countryCodeISO || uniqueId.split('-')[0],
+        countryCodeISO: countryCodeISO || uniqueId,
         regionCodeISO: regionCodeISO || uniqueId
       };
+      
+      console.log('保存するデータ:', newPlace);
       
       // データ保存
       await dbService.saveVisitedPlace(newPlace);
@@ -82,6 +88,8 @@ const useAtlasStore = create((set, get) => ({
           type: 'success'
         }
       });
+      
+      console.log('更新後の訪問済み場所リスト:', visitedPlaces);
       
       // 3秒後にトーストを自動で閉じる
       setTimeout(() => {

@@ -63,26 +63,36 @@ body {
 
 /* マップポップアップ */
 .map-popup {
-  padding: 5px;
+  padding: 8px 12px;
+  min-width: 150px;
 }
 
 .map-popup h3 {
   margin: 0 0 10px 0;
   font-size: 1rem;
+  text-align: center;
 }
 
 .mark-visited-btn {
   background-color: var(--secondary-color);
   color: white;
   border: none;
-  padding: 5px 10px;
+  padding: 8px 12px;
   border-radius: 4px;
   cursor: pointer;
   font-size: 0.9rem;
+  display: block;
+  width: 100%;
+  transition: background-color 0.2s, transform 0.1s;
 }
 
 .mark-visited-btn:hover {
   background-color: #2980b9;
+  transform: translateY(-1px);
+}
+
+.mark-visited-btn:active {
+  transform: translateY(1px);
 }
 
 /* ハイライト効果のアニメーション */
@@ -149,6 +159,7 @@ body {
   background-color: #7f8c8d;
 }
 
+/* モバイル用の調整 */
 @media (max-width: 768px) {
   .import-container {
     padding: 15px;
@@ -162,5 +173,14 @@ body {
   
   .material-icons {
     font-size: 20px;
+  }
+  
+  .mark-visited-btn {
+    padding: 10px 15px; /* タッチしやすいようにボタンを大きく */
+    font-size: 1rem;
+  }
+  
+  .map-popup {
+    padding: 10px;
   }
 }

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import maplibregl from 'maplibre-gl';
 import useAtlasStore from '../store/useAtlasStore';
 
@@ -18,6 +18,14 @@ const useMapInteraction = (containerRef) => {
     markPlaceAsVisited, 
     initializeStore 
   } = useAtlasStore();
+
+  // ポップアップからの訪問登録処理
+  const handleVisitButtonClick = useCallback((placeInfo) => {
+    markPlaceAsVisited(placeInfo);
+    if (popup.current) {
+      popup.current.remove();
+    }
+  }, [markPlaceAsVisited]);
 
   // 初期化
   useEffect(() => {
@@ -145,23 +153,28 @@ const useMapInteraction = (containerRef) => {
         
         setSelectedFeature(placeInfo);
         
-        // 地域名をポップアップ表示
+        // 地域名をポップアップ表示 - カスタムHTMLを使用
+        const popupHTML = `
+          <div class="map-popup">
+            <h3>${properties.ADMIN}</h3>
+            <button class="mark-visited-btn" id="mark-visited-${properties.ISO_A2}">訪問済みにする</button>
+          </div>
+        `;
+        
         popup.current
           .setLngLat(e.lngLat)
-          .setHTML(`
-            <div class="map-popup">
-              <h3>${properties.ADMIN}</h3>
-              <button class="mark-visited-btn">訪問済みにする</button>
-            </div>
-          `)
+          .setHTML(popupHTML)
           .addTo(map.current);
         
-        // 訪問ボタンクリックイベント - DOMを直接操作しない方法に後で修正
-        const markBtn = document.querySelector('.mark-visited-btn');
+        // ポップアップ上のボタンにイベント追加
+        const markBtn = document.getElementById(`mark-visited-${properties.ISO_A2}`);
         if (markBtn) {
-          markBtn.addEventListener('click', () => {
-            markPlaceAsVisited(placeInfo);
-            popup.current.remove();
+          // 既存のイベントリスナーを削除してからリスナーを追加（メモリリーク防止）
+          const newMarkBtn = markBtn.cloneNode(true);
+          markBtn.parentNode.replaceChild(newMarkBtn, markBtn);
+          
+          newMarkBtn.addEventListener('click', () => {
+            handleVisitButtonClick(placeInfo);
           });
         }
       });
@@ -200,7 +213,7 @@ const useMapInteraction = (containerRef) => {
       }
     };
     
-  }, [containerRef, visitedPlaces, markPlaceAsVisited, userLocation]);
+  }, [containerRef, visitedPlaces, userLocation, handleVisitButtonClick]);
   
   // 訪問地域データの変更をマップスタイルに反映
   useEffect(() => {
@@ -220,7 +233,7 @@ const useMapInteraction = (containerRef) => {
   }, [visitedPlaces]);
 
   // 現在地に移動する関数
-  const flyToUserLocation = () => {
+  const flyToUserLocation = useCallback(() => {
     if (!map.current || !userLocation) return;
     
     map.current.flyTo({
@@ -228,7 +241,7 @@ const useMapInteraction = (containerRef) => {
       zoom: 5,
       speed: 1.5
     });
-  };
+  }, [userLocation]);
 
   return {
     map,

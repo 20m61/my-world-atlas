@@ -1,18 +1,41 @@
-import React from 'react';
+import React, { useRef } from 'react';
 
 const ImportForm = ({ isOpen, onClose, onSubmit }) => {
+  const fileInputRef = useRef(null);
+  
   if (!isOpen) return null;
   
   const handleSubmit = (e) => {
     e.preventDefault();
-    const file = e.target.csvFile.files[0];
+    const file = fileInputRef.current.files[0];
     onSubmit(file);
   };
   
+  // Escキーでモーダルを閉じる
+  const handleKeyDown = (e) => {
+    if (e.key === 'Escape') {
+      onClose();
+    }
+  };
+  
+  // モーダル外クリックで閉じる
+  const handleOverlayClick = (e) => {
+    if (e.target.className === 'import-overlay') {
+      onClose();
+    }
+  };
+  
   return (
-    <div className="import-overlay">
+    <div 
+      className="import-overlay" 
+      onClick={handleOverlayClick} 
+      onKeyDown={handleKeyDown}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="import-title"
+    >
       <div className="import-container">
-        <h3>CSVファイルをインポート</h3>
+        <h3 id="import-title">CSVファイルをインポート</h3>
         <form onSubmit={handleSubmit}>
           <div className="form-group">
             <label htmlFor="csvFile">CSVファイルを選択</label>
@@ -20,9 +43,15 @@ const ImportForm = ({ isOpen, onClose, onSubmit }) => {
               type="file" 
               id="csvFile" 
               name="csvFile"
+              ref={fileInputRef}
               accept=".csv" 
               required
+              aria-required="true"
+              aria-describedby="file-format-help"
             />
+            <small id="file-format-help" className="form-text text-muted">
+              My World Atlasのエクスポート形式に合わせたCSVファイルを選択してください
+            </small>
           </div>
           <div className="form-actions">
             <button 

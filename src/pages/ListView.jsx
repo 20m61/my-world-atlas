@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useAtlasStore from '../store/useAtlasStore';
 import Toast from '../components/Toast';
@@ -29,7 +29,6 @@ function ListView() {
   const [sortDirection, setSortDirection] = useState('desc');
   const [filter, setFilter] = useState('');
   const [adminFilter, setAdminFilter] = useState('all');
-  const [displayData, setDisplayData] = useState([]);
   const [importOpen, setImportOpen] = useState(false);
   const [deleteConfirmation, setDeleteConfirmation] = useState({
     isOpen: false,
@@ -42,8 +41,8 @@ function ListView() {
     initializeStore();
   }, [initializeStore]);
   
-  // 訪問地域のソートとフィルタリング
-  useEffect(() => {
+  // メモ化されたソート・フィルタリング関数
+  const displayData = useMemo(() => {
     let filteredData = [...visitedPlaces];
     
     // 管理レベルでフィルタリング
@@ -61,7 +60,7 @@ function ListView() {
     }
     
     // ソート
-    filteredData.sort((a, b) => {
+    return filteredData.sort((a, b) => {
       let valueA = a[sortBy];
       let valueB = b[sortBy];
       
@@ -76,12 +75,10 @@ function ListView() {
       if (valueA > valueB) return sortDirection === 'asc' ? 1 : -1;
       return 0;
     });
-    
-    setDisplayData(filteredData);
   }, [visitedPlaces, sortBy, sortDirection, filter, adminFilter]);
   
   // ソート順変更
-  const handleSortChange = (column) => {
+  const handleSortChange = useCallback((column) => {
     if (sortBy === column) {
       // 同じカラムの場合は方向を切り替え
       setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
@@ -90,27 +87,27 @@ function ListView() {
       setSortBy(column);
       setSortDirection('asc');
     }
-  };
+  }, [sortBy, sortDirection]);
   
   // 行をクリックして地図にジャンプ
-  const handleRowClick = withErrorHandling((place) => {
+  const handleRowClick = useCallback(withErrorHandling((place) => {
     // 将来的にはURLパラメータで選択地域IDを渡す
     navigate('/');
   }, (error) => {
     showToast('地図画面への移動中にエラーが発生しました', 'error');
-  });
+  }), [navigate, showToast]);
   
   // 削除確認ダイアログを表示
-  const handleDeleteClick = (uniqueId, placeName) => {
+  const handleDeleteClick = useCallback((uniqueId, placeName) => {
     setDeleteConfirmation({
       isOpen: true,
       uniqueId,
       placeName
     });
-  };
+  }, []);
   
   // 削除の確定処理
-  const confirmDelete = () => {
+  const confirmDelete = useCallback(() => {
     if (deleteConfirmation.uniqueId) {
       removePlaceVisit(deleteConfirmation.uniqueId);
     }
@@ -121,19 +118,19 @@ function ListView() {
       uniqueId: null,
       placeName: ''
     });
-  };
+  }, [deleteConfirmation.uniqueId, removePlaceVisit]);
   
   // 削除キャンセル
-  const cancelDelete = () => {
+  const cancelDelete = useCallback(() => {
     setDeleteConfirmation({
       isOpen: false,
       uniqueId: null,
       placeName: ''
     });
-  };
+  }, []);
   
   // インポートフォーム送信処理
-  const handleImportSubmit = (file) => {
+  const handleImportSubmit = useCallback((file) => {
     if (!file) {
       showToast('ファイルを選択してください', 'warning');
       return;
@@ -141,7 +138,17 @@ function ListView() {
     
     importFromCSV(file);
     setImportOpen(false);
-  };
+  }, [importFromCSV, showToast]);
+  
+  // フィルター変更ハンドラ
+  const handleFilterChange = useCallback((value) => {
+    setFilter(value);
+  }, []);
+  
+  // 管理レベルフィルター変更ハンドラ
+  const handleAdminFilterChange = useCallback((value) => {
+    setAdminFilter(value);
+  }, []);
   
   return (
     <div className="list-view">
@@ -149,9 +156,9 @@ function ListView() {
         {/* フィルターコントロール */}
         <FilterControls 
           filter={filter}
-          onFilterChange={setFilter}
+          onFilterChange={handleFilterChange}
           adminFilter={adminFilter}
-          onAdminFilterChange={setAdminFilter}
+          onAdminFilterChange={handleAdminFilterChange}
         />
         
         {/* アクションボタン */}
@@ -162,24 +169,27 @@ function ListView() {
       </div>
       
       <div className="table-container">
-        <table className="list-table">
+        <table className="list-table" aria-label="訪問記録一覧">
           <thead>
             <tr>
               <th 
                 className={sortBy === 'placeName' ? `sorted-${sortDirection}` : ''}
                 onClick={() => handleSortChange('placeName')}
+                aria-sort={sortBy === 'placeName' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
               >
                 地域名
               </th>
               <th 
                 className={sortBy === 'adminLevel' ? `sorted-${sortDirection}` : ''}
                 onClick={() => handleSortChange('adminLevel')}
+                aria-sort={sortBy === 'adminLevel' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
               >
                 レベル
               </th>
               <th 
                 className={sortBy === 'dateMarked' ? `sorted-${sortDirection}` : ''}
                 onClick={() => handleSortChange('dateMarked')}
+                aria-sort={sortBy === 'dateMarked' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
               >
                 記録日時
               </th>
@@ -210,7 +220,7 @@ function ListView() {
       </div>
       
       {/* カウンター */}
-      <div className="list-counter">
+      <div className="list-counter" aria-live="polite">
         {displayData.length > 0 && (
           <p>
             {adminFilter === 'all' 

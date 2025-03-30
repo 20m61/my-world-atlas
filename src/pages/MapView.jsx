@@ -68,7 +68,7 @@ function MapView() {
               'fill-color': [
                 'case',
                 ['in', ['get', 'iso_a2'], ['literal', visitedPlaces.map(p => p.countryCodeISO).filter(Boolean)]],
-                'var(--visited-color)',
+                '#ADD8E6',
                 'rgba(0, 0, 0, 0)'
               ],
               'fill-opacity': 0.7
@@ -90,7 +90,7 @@ function MapView() {
             source: 'countries',
             'source-layer': 'country',
             layout: {
-              'text-field': ['get', 'name'],
+              'text-field': '{name}',
               'text-size': 12,
               'text-max-width': 10,
               'text-transform': 'uppercase'
@@ -182,7 +182,7 @@ function MapView() {
       map.current.setPaintProperty('countries-fill', 'fill-color', [
         'case',
         ['in', ['get', 'iso_a2'], ['literal', visitedPlaces.map(p => p.countryCodeISO).filter(Boolean)]],
-        'var(--visited-color)',
+        '#ADD8E6',
         'rgba(0, 0, 0, 0)'
       ]);
     } catch (error) {

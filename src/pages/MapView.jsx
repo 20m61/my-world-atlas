@@ -21,15 +21,37 @@ function MapView() {
   } = useAtlasStore();
   
   const [importOpen, setImportOpen] = useState(false);
+  const [userLocation, setUserLocation] = useState(null);
   
   // 初期化
   useEffect(() => {
     initializeStore();
+    
+    // 現在地の取得
+    if ('geolocation' in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const { longitude, latitude } = position.coords;
+          setUserLocation([longitude, latitude]);
+        },
+        (error) => {
+          console.log('現在地を取得できませんでした:', error);
+          // エラー時は東京都千代田区の座標をセット
+          setUserLocation([139.7528, 35.6852]);
+        }
+      );
+    } else {
+      // Geolocation APIに対応していない場合は東京都千代田区を中心に
+      setUserLocation([139.7528, 35.6852]);
+    }
   }, [initializeStore]);
   
   // 地図初期化
   useEffect(() => {
     if (map.current) return;
+    
+    // 初期座標（ユーザーの位置情報がまだない場合は日本）
+    const initialCenter = userLocation || [139, 35];
     
     map.current = new maplibregl.Map({
       container: mapContainer.current,
@@ -57,7 +79,7 @@ function MapView() {
           }
         ]
       },
-      center: [139, 35], // 日本中心で表示
+      center: initialCenter,
       zoom: 3
     });
     
@@ -148,6 +170,23 @@ function MapView() {
       map.current.on('mouseleave', 'countries-fill', () => {
         map.current.getCanvas().style.cursor = '';
       });
+      
+      // 現在地に移動（データが読み込まれた後）
+      if (userLocation) {
+        map.current.flyTo({
+          center: userLocation,
+          zoom: 5,
+          speed: 1.5,
+          curve: 1.5
+        });
+        
+        // 現在地のマーカー
+        new maplibregl.Marker({
+          color: '#e74c3c'
+        })
+          .setLngLat(userLocation)
+          .addTo(map.current);
+      }
     });
     
     return () => {
@@ -157,7 +196,7 @@ function MapView() {
       }
     };
     
-  }, [visitedPlaces, markPlaceAsVisited]);
+  }, [visitedPlaces, markPlaceAsVisited, userLocation]);
   
   // 訪問地域データの変更をマップスタイルに反映
   useEffect(() => {
@@ -209,6 +248,22 @@ function MapView() {
         >
           <span className="material-icons">file_upload</span>
         </button>
+        
+        {userLocation && (
+          <button 
+            className="map-control-button"
+            onClick={() => {
+              map.current.flyTo({
+                center: userLocation,
+                zoom: 5,
+                speed: 1.5
+              });
+            }}
+            title="現在地へ移動"
+          >
+            <span className="material-icons">my_location</span>
+          </button>
+        )}
       </div>
       
       {/* インポートフォーム */}

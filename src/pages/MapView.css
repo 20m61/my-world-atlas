@@ -10,7 +10,7 @@
   height: calc(100vh - 70px); /* ヘッダーの高さ分調整 */
   position: relative;
   overflow: hidden;
-  touch-action: none; /* タッチデバイスでのスクロールを防止 */
+  touch-action: manipulation; /* ピンチズームを許可するが、パン/スクロールは防止 */
 }
 
 /* スクロールバーを非表示にする */

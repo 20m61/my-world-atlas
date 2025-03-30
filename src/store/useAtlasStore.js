@@ -1,21 +1,8 @@
 import { create } from 'zustand';
-import { openDB } from 'idb';
-import Papa from 'papaparse';
 import { formatErrorMessage, logError, withErrorHandling } from '../utils/errorHandling';
-
-// IndexedDBのセットアップ
-const dbPromise = openDB('myWorldAtlasDB', 1, {
-  upgrade(db) {
-    // 訪問済み地域のストア作成
-    const visitedStore = db.createObjectStore('visitedPlaces', {
-      keyPath: 'uniqueId'
-    });
-    
-    // インデックス作成
-    visitedStore.createIndex('adminLevel', 'adminLevel');
-    visitedStore.createIndex('dateMarked', 'dateMarked');
-  }
-});
+import dbService from '../services/dbService';
+import fileService from '../services/fileService';
+import mapService from '../services/mapService';
 
 // Zustandストア
 const useAtlasStore = create((set, get) => ({
@@ -31,8 +18,7 @@ const useAtlasStore = create((set, get) => ({
     set({ isLoading: true });
     
     try {
-      const db = await dbPromise;
-      const visitedPlaces = await db.getAll('visitedPlaces');
+      const visitedPlaces = await dbService.getAllVisitedPlaces();
       set({ visitedPlaces, isLoading: false });
     } catch (error) {
       logError(error, { action: 'initializeStore' });
@@ -71,9 +57,6 @@ const useAtlasStore = create((set, get) => ({
     set({ isLoading: true });
     
     try {
-      const db = await dbPromise;
-      const tx = db.transaction('visitedPlaces', 'readwrite');
-      
       // 新規データ作成
       const newPlace = {
         uniqueId,
@@ -85,8 +68,7 @@ const useAtlasStore = create((set, get) => ({
       };
       
       // データ保存
-      await tx.store.put(newPlace);
-      await tx.done;
+      await dbService.saveVisitedPlace(newPlace);
       
       // 状態更新
       const visitedPlaces = [...get().visitedPlaces, newPlace];
@@ -139,12 +121,8 @@ const useAtlasStore = create((set, get) => ({
     set({ isLoading: true });
     
     try {
-      const db = await dbPromise;
-      const tx = db.transaction('visitedPlaces', 'readwrite');
-      
       // データ削除
-      await tx.store.delete(uniqueId);
-      await tx.done;
+      await dbService.deleteVisitedPlace(uniqueId);
       
       // 状態更新
       const visitedPlaces = get().visitedPlaces.filter(place => place.uniqueId !== uniqueId);
@@ -219,30 +197,7 @@ const useAtlasStore = create((set, get) => ({
     }
     
     try {
-      // CSVデータの作成
-      const csvData = Papa.unparse({
-        fields: ['uniqueId', 'placeName', 'adminLevel', 'dateMarked', 'countryCodeISO', 'regionCodeISO'],
-        data: visitedPlaces
-      });
-      
-      // ファイル名の生成（YYYYMMDD形式）
-      const date = new Date();
-      const dateStr = `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}${String(date.getDate()).padStart(2, '0')}`;
-      const fileName = `MyWorldAtlas_Export_${dateStr}.csv`;
-      
-      // ダウンロード用のリンク作成
-      const blob = new Blob([csvData], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.setAttribute('href', url);
-      link.setAttribute('download', fileName);
-      link.style.visibility = 'hidden';
-      
-      // リンクをクリックしてダウンロード開始
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      
+      fileService.exportToCSV(visitedPlaces);
       get().showToast('CSVファイルをエクスポートしました', 'success');
     } catch (error) {
       logError(error, { action: 'exportToCSV' });
@@ -265,58 +220,16 @@ const useAtlasStore = create((set, get) => ({
     set({ isLoading: true });
     
     try {
-      // ファイル読み込み
-      const text = await new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = (e) => resolve(e.target.result);
-        reader.onerror = (e) => {
-          reject(new Error('ファイルの読み込みに失敗しました'));
-        };
-        reader.readAsText(file);
-      });
+      // CSVファイルのパース
+      const { data } = await fileService.parseCSV(file);
       
-      // CSVパース
-      const { data, errors, meta } = Papa.parse(text, {
-        header: true,
-        dynamicTyping: true,
-        skipEmptyLines: true
-      });
+      // データベースへの一括保存
+      const { success, skipped } = await dbService.bulkSaveVisitedPlaces(data);
       
-      if (errors.length > 0) {
-        throw new Error('CSVの解析中にエラーが発生しました: ' + 
-          errors.map(err => `行 ${err.row}: ${err.message}`).join(', '));
-      }
+      // 更新された全データを取得
+      const visitedPlaces = await dbService.getAllVisitedPlaces();
       
-      // データの検証
-      const validData = data.filter(row => 
-        row.uniqueId && row.placeName && row.adminLevel
-      );
-      
-      if (validData.length === 0) {
-        throw new Error('有効なデータが見つかりませんでした');
-      }
-      
-      // データベースに保存
-      const db = await dbPromise;
-      const tx = db.transaction('visitedPlaces', 'readwrite');
-      
-      let success = 0;
-      let skipped = 0;
-      
-      for (const row of validData) {
-        try {
-          await tx.store.put(row);
-          success++;
-        } catch (e) {
-          skipped++;
-          logError(e, { action: 'importFromCSV', row });
-        }
-      }
-      
-      await tx.done;
-      
-      // 状態の更新
-      const visitedPlaces = await db.getAll('visitedPlaces');
+      // 状態更新
       set({ 
         visitedPlaces, 
         isLoading: false,
@@ -351,7 +264,48 @@ const useAtlasStore = create((set, get) => ({
         type: 'error'
       }
     });
-  })
+  }),
+  
+  // アクション：現在地を取得
+  getCurrentLocation: withErrorHandling(async () => {
+    try {
+      return await mapService.getCurrentLocation();
+    } catch (error) {
+      // デフォルトの位置情報（東京都千代田区）
+      return { longitude: 139.7528, latitude: 35.6852 };
+    }
+  }, (error) => {
+    // エラーログは記録するが、ユーザーには通知しない
+    logError(error, { action: 'getCurrentLocation' });
+    // デフォルトの位置情報を返す
+    return { longitude: 139.7528, latitude: 35.6852 };
+  }),
+  
+  // アクション：国境データの取得
+  getCountriesData: withErrorHandling(async () => {
+    try {
+      return await mapService.getCountriesGeoJson();
+    } catch (error) {
+      logError(error, { action: 'getCountriesData' });
+      const errorMessage = formatErrorMessage(error, '地図データの取得に失敗しました');
+      
+      get().showToast(errorMessage, 'error');
+      throw error;
+    }
+  }, (error) => {
+    get().showToast(formatErrorMessage(error, '地図データの取得に失敗しました'), 'error');
+    return null;
+  }),
+  
+  // アクション：訪問国のスタイル生成
+  getVisitedCountriesStyle: () => {
+    const visitedPlaces = get().visitedPlaces;
+    const visitedCountryCodes = visitedPlaces
+      .filter(place => place.countryCodeISO)
+      .map(place => place.countryCodeISO);
+    
+    return mapService.generateVisitedCountriesStyle(visitedCountryCodes);
+  }
 }));
 
 export default useAtlasStore;

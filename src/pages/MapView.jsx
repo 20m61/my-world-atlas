@@ -45,10 +45,6 @@ function MapView() {
             ],
             tileSize: 256,
             attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-          },
-          'countries': {
-            type: 'vector',
-            url: 'https://openmaptiles.geo.uzh.ch/tiles/v3/world_boundaries_political/{z}/{x}/{y}.pbf'
           }
         },
         layers: [
@@ -58,48 +54,6 @@ function MapView() {
             source: 'osm',
             minzoom: 0,
             maxzoom: 19
-          },
-          {
-            id: 'countries-fill',
-            type: 'fill',
-            source: 'countries',
-            'source-layer': 'country',
-            paint: {
-              'fill-color': [
-                'case',
-                ['in', ['get', 'iso_a2'], ['literal', visitedPlaces.map(p => p.countryCodeISO).filter(Boolean)]],
-                '#ADD8E6',
-                'rgba(0, 0, 0, 0)'
-              ],
-              'fill-opacity': 0.7
-            }
-          },
-          {
-            id: 'countries-outline',
-            type: 'line',
-            source: 'countries',
-            'source-layer': 'country',
-            paint: {
-              'line-color': '#627BC1',
-              'line-width': 1
-            }
-          },
-          {
-            id: 'countries-label',
-            type: 'symbol',
-            source: 'countries',
-            'source-layer': 'country',
-            layout: {
-              'text-field': '{name}',
-              'text-size': 12,
-              'text-max-width': 10,
-              'text-transform': 'uppercase'
-            },
-            paint: {
-              'text-color': '#4A4A4A',
-              'text-halo-color': '#FFFFFF',
-              'text-halo-width': 1
-            }
           }
         ]
       },
@@ -113,56 +67,87 @@ function MapView() {
       closeOnClick: true
     });
     
-    // 地図クリックイベント
-    map.current.on('click', 'countries-fill', (e) => {
-      if (e.features.length === 0) return;
-      
-      const feature = e.features[0];
-      const properties = feature.properties;
-      
-      // 選択地域の情報
-      const placeInfo = {
-        uniqueId: properties.iso_a2,
-        placeName: properties.name,
-        adminLevel: 'Country',
-        countryCodeISO: properties.iso_a2
-      };
-      
-      setSelectedFeature(placeInfo);
-      
-      // 地域名をポップアップ表示
-      popup.current
-        .setLngLat(e.lngLat)
-        .setHTML(`
-          <div class="map-popup">
-            <h3>${properties.name}</h3>
-            <button class="mark-visited-btn">訪問済みにする</button>
-          </div>
-        `)
-        .addTo(map.current);
-      
-      // 訪問ボタンクリックイベント
-      const markBtn = document.querySelector('.mark-visited-btn');
-      if (markBtn) {
-        markBtn.addEventListener('click', () => {
-          markPlaceAsVisited(placeInfo);
-          popup.current.remove();
-        });
-      }
-    });
-    
-    // マウスオーバーで色変更
-    map.current.on('mouseenter', 'countries-fill', () => {
-      map.current.getCanvas().style.cursor = 'pointer';
-    });
-    
-    map.current.on('mouseleave', 'countries-fill', () => {
-      map.current.getCanvas().style.cursor = '';
-    });
-    
     // 地図読み込み完了
     map.current.on('load', () => {
-      // StateデータレイヤーをここでロードしたりTileサーバーから取得できるようにする
+      // 国境データの追加
+      map.current.addSource('countries', {
+        type: 'geojson',
+        data: 'https://raw.githubusercontent.com/datasets/geo-countries/master/data/countries.geojson'
+      });
+      
+      // 国の塗りつぶし
+      map.current.addLayer({
+        id: 'countries-fill',
+        type: 'fill',
+        source: 'countries',
+        paint: {
+          'fill-color': [
+            'case',
+            ['in', ['get', 'ISO_A2'], ['literal', visitedPlaces.map(p => p.countryCodeISO).filter(Boolean)]],
+            '#ADD8E6',
+            'rgba(0, 0, 0, 0)'
+          ],
+          'fill-opacity': 0.7
+        }
+      });
+      
+      // 国境線
+      map.current.addLayer({
+        id: 'countries-outline',
+        type: 'line',
+        source: 'countries',
+        paint: {
+          'line-color': '#627BC1',
+          'line-width': 1
+        }
+      });
+      
+      // 地図クリックイベント
+      map.current.on('click', 'countries-fill', (e) => {
+        if (!e.features || e.features.length === 0) return;
+        
+        const feature = e.features[0];
+        const properties = feature.properties;
+        
+        // 選択地域の情報
+        const placeInfo = {
+          uniqueId: properties.ISO_A2,
+          placeName: properties.ADMIN,
+          adminLevel: 'Country',
+          countryCodeISO: properties.ISO_A2
+        };
+        
+        setSelectedFeature(placeInfo);
+        
+        // 地域名をポップアップ表示
+        popup.current
+          .setLngLat(e.lngLat)
+          .setHTML(`
+            <div class="map-popup">
+              <h3>${properties.ADMIN}</h3>
+              <button class="mark-visited-btn">訪問済みにする</button>
+            </div>
+          `)
+          .addTo(map.current);
+        
+        // 訪問ボタンクリックイベント
+        const markBtn = document.querySelector('.mark-visited-btn');
+        if (markBtn) {
+          markBtn.addEventListener('click', () => {
+            markPlaceAsVisited(placeInfo);
+            popup.current.remove();
+          });
+        }
+      });
+      
+      // マウスオーバーで色変更
+      map.current.on('mouseenter', 'countries-fill', () => {
+        map.current.getCanvas().style.cursor = 'pointer';
+      });
+      
+      map.current.on('mouseleave', 'countries-fill', () => {
+        map.current.getCanvas().style.cursor = '';
+      });
     });
     
     return () => {
@@ -176,12 +161,12 @@ function MapView() {
   
   // 訪問地域データの変更をマップスタイルに反映
   useEffect(() => {
-    if (!map.current || !map.current.isStyleLoaded()) return;
+    if (!map.current || !map.current.isStyleLoaded() || !map.current.getLayer('countries-fill')) return;
     
     try {
       map.current.setPaintProperty('countries-fill', 'fill-color', [
         'case',
-        ['in', ['get', 'iso_a2'], ['literal', visitedPlaces.map(p => p.countryCodeISO).filter(Boolean)]],
+        ['in', ['get', 'ISO_A2'], ['literal', visitedPlaces.map(p => p.countryCodeISO).filter(Boolean)]],
         '#ADD8E6',
         'rgba(0, 0, 0, 0)'
       ]);

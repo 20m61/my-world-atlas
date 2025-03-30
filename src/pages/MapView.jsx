@@ -80,8 +80,16 @@ function MapView() {
         ]
       },
       center: initialCenter,
-      zoom: 3
+      zoom: 3,
+      touchZoomRotate: true,
+      dragPan: true,
+      doubleClickZoom: true,
+      touchPitch: true
     });
+    
+    // タッチ操作を有効化
+    map.current.touchZoomRotate.enable();
+    map.current.dragPan.enable();
     
     // ポップアップ作成
     popup.current = new maplibregl.Popup({

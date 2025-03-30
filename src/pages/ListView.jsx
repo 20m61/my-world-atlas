@@ -2,8 +2,17 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useAtlasStore from '../store/useAtlasStore';
 import Toast from '../components/Toast';
+import FilterControls from '../components/list/FilterControls';
+import ActionButtons from '../components/list/ActionButtons';
+import ImportForm from '../components/map/ImportForm';
+import ListItem from '../components/list/ListItem';
+import ConfirmDialog from '../components/list/ConfirmDialog';
+import { withErrorHandling } from '../utils/errorHandling';
 import './ListView.css';
 
+/**
+ * 訪問記録の一覧表示画面
+ */
 function ListView() {
   const navigate = useNavigate();
   const { 
@@ -12,7 +21,8 @@ function ListView() {
     toast, 
     removePlaceVisit,
     exportToCSV,
-    importFromCSV
+    importFromCSV,
+    showToast
   } = useAtlasStore();
   
   const [sortBy, setSortBy] = useState('dateMarked');
@@ -21,6 +31,11 @@ function ListView() {
   const [adminFilter, setAdminFilter] = useState('all');
   const [displayData, setDisplayData] = useState([]);
   const [importOpen, setImportOpen] = useState(false);
+  const [deleteConfirmation, setDeleteConfirmation] = useState({
+    isOpen: false,
+    uniqueId: null,
+    placeName: ''
+  });
   
   // 初期化
   useEffect(() => {
@@ -78,24 +93,49 @@ function ListView() {
   };
   
   // 行をクリックして地図にジャンプ
-  const handleRowClick = (place) => {
-    // TODO: URLパラメータで選択地域IDを渡すように実装
+  const handleRowClick = withErrorHandling((place) => {
+    // 将来的にはURLパラメータで選択地域IDを渡す
     navigate('/');
+  }, (error) => {
+    showToast('地図画面への移動中にエラーが発生しました', 'error');
+  });
+  
+  // 削除確認ダイアログを表示
+  const handleDeleteClick = (uniqueId, placeName) => {
+    setDeleteConfirmation({
+      isOpen: true,
+      uniqueId,
+      placeName
+    });
   };
   
-  // 削除ボタンのクリック
-  const handleDelete = (e, uniqueId) => {
-    e.stopPropagation(); // 行クリックイベントの伝播を止める
-    if (window.confirm('この訪問記録を削除しますか？')) {
-      removePlaceVisit(uniqueId);
+  // 削除の確定処理
+  const confirmDelete = () => {
+    if (deleteConfirmation.uniqueId) {
+      removePlaceVisit(deleteConfirmation.uniqueId);
     }
+    
+    // ダイアログを閉じる
+    setDeleteConfirmation({
+      isOpen: false,
+      uniqueId: null,
+      placeName: ''
+    });
+  };
+  
+  // 削除キャンセル
+  const cancelDelete = () => {
+    setDeleteConfirmation({
+      isOpen: false,
+      uniqueId: null,
+      placeName: ''
+    });
   };
   
   // インポートフォーム送信処理
-  const handleImportSubmit = (e) => {
-    e.preventDefault();
-    const file = e.target.csvFile.files[0];
+  const handleImportSubmit = (file) => {
     if (!file) {
+      showToast('ファイルを選択してください', 'warning');
       return;
     }
     
@@ -103,56 +143,22 @@ function ListView() {
     setImportOpen(false);
   };
   
-  // 日付のフォーマット
-  const formatDate = (isoDate) => {
-    if (!isoDate) return '';
-    const date = new Date(isoDate);
-    return date.toLocaleDateString('ja-JP', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  };
-  
   return (
     <div className="list-view">
       <div className="list-controls">
-        <div className="filter-controls">
-          <input 
-            type="text"
-            className="search-input"
-            placeholder="検索..."
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-          />
-          
-          <select 
-            className="admin-filter"
-            value={adminFilter}
-            onChange={(e) => setAdminFilter(e.target.value)}
-          >
-            <option value="all">すべて</option>
-            <option value="Country">国</option>
-            <option value="State">州・都道府県</option>
-          </select>
-        </div>
+        {/* フィルターコントロール */}
+        <FilterControls 
+          filter={filter}
+          onFilterChange={setFilter}
+          adminFilter={adminFilter}
+          onAdminFilterChange={setAdminFilter}
+        />
         
-        <div className="action-buttons">
-          <button 
-            className="btn btn-sm"
-            onClick={exportToCSV}
-          >
-            エクスポート
-          </button>
-          <button 
-            className="btn btn-sm"
-            onClick={() => setImportOpen(true)}
-          >
-            インポート
-          </button>
-        </div>
+        {/* アクションボタン */}
+        <ActionButtons 
+          onExportClick={exportToCSV}
+          onImportClick={() => setImportOpen(true)}
+        />
       </div>
       
       <div className="table-container">
@@ -191,24 +197,12 @@ function ListView() {
               </tr>
             ) : (
               displayData.map((place) => (
-                <tr 
+                <ListItem 
                   key={place.uniqueId}
-                  className="list-row"
-                  onClick={() => handleRowClick(place)}
-                >
-                  <td>{place.placeName}</td>
-                  <td>{place.adminLevel === 'Country' ? '国' : '州・都道府県'}</td>
-                  <td>{formatDate(place.dateMarked)}</td>
-                  <td>
-                    <button 
-                      className="delete-btn"
-                      onClick={(e) => handleDelete(e, place.uniqueId)}
-                      title="削除"
-                    >
-                      ✕
-                    </button>
-                  </td>
-                </tr>
+                  place={place}
+                  onRowClick={handleRowClick}
+                  onDeleteClick={handleDeleteClick}
+                />
               ))
             )}
           </tbody>
@@ -227,39 +221,22 @@ function ListView() {
       </div>
       
       {/* インポートフォーム */}
-      {importOpen && (
-        <div className="import-overlay">
-          <div className="import-container">
-            <h3>CSVファイルをインポート</h3>
-            <form onSubmit={handleImportSubmit}>
-              <div className="form-group">
-                <label htmlFor="csvFile">CSVファイルを選択</label>
-                <input 
-                  type="file" 
-                  id="csvFile" 
-                  name="csvFile"
-                  accept=".csv" 
-                />
-              </div>
-              <div className="form-actions">
-                <button 
-                  type="button" 
-                  className="btn btn-secondary"
-                  onClick={() => setImportOpen(false)}
-                >
-                  キャンセル
-                </button>
-                <button 
-                  type="submit" 
-                  className="btn btn-primary"
-                >
-                  インポート
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <ImportForm
+        isOpen={importOpen}
+        onClose={() => setImportOpen(false)}
+        onSubmit={handleImportSubmit}
+      />
+      
+      {/* 削除確認ダイアログ */}
+      <ConfirmDialog
+        isOpen={deleteConfirmation.isOpen}
+        title="訪問記録の削除"
+        message={`「${deleteConfirmation.placeName}」の訪問記録を削除しますか？`}
+        confirmText="削除する"
+        cancelText="キャンセル"
+        onConfirm={confirmDelete}
+        onCancel={cancelDelete}
+      />
       
       {/* トースト通知 */}
       <Toast 

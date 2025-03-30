@@ -5,6 +5,7 @@
   height: calc(100vh - 70px);
   display: flex;
   flex-direction: column;
+  overflow-y: auto;
 }
 
 .list-controls {

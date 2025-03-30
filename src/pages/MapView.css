@@ -85,6 +85,17 @@ body {
   background-color: #2980b9;
 }
 
+/* ハイライト効果のアニメーション */
+@keyframes highlight-pulse {
+  0% { opacity: 0.7; }
+  50% { opacity: 0.9; }
+  100% { opacity: 0.7; }
+}
+
+.country-highlight {
+  animation: highlight-pulse 1.5s infinite ease-in-out;
+}
+
 /* インポート画面 */
 .import-overlay {
   position: fixed;

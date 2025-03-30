@@ -12,6 +12,7 @@ const useMapInteraction = (containerRef) => {
   const popup = useRef(null);
   const [selectedFeature, setSelectedFeature] = useState(null);
   const [userLocation, setUserLocation] = useState(null);
+  const [hoveredCountryId, setHoveredCountryId] = useState(null); // ホバー/タッチ中の国のID
 
   const { 
     visitedPlaces, 
@@ -49,6 +50,45 @@ const useMapInteraction = (containerRef) => {
       setUserLocation([139.7528, 35.6852]);
     }
   }, [initializeStore]);
+  
+  // ハイライト表示のハンドラー
+  const handleCountryHighlight = useCallback((e) => {
+    if (e.features && e.features.length > 0) {
+      const countryId = e.features[0].properties.ISO_A2;
+      
+      // 以前と同じ国なら何もしない
+      if (hoveredCountryId === countryId) return;
+      
+      // 以前ハイライトされた国があれば、そのハイライトを削除
+      if (hoveredCountryId && map.current) {
+        map.current.setFeatureState(
+          { source: 'countries', id: hoveredCountryId },
+          { hover: false }
+        );
+      }
+      
+      // 新しい国をハイライト
+      if (map.current) {
+        map.current.setFeatureState(
+          { source: 'countries', id: countryId },
+          { hover: true }
+        );
+      }
+      
+      setHoveredCountryId(countryId);
+    }
+  }, [hoveredCountryId]);
+  
+  // ハイライト解除のハンドラー
+  const handleCountryUnhighlight = useCallback(() => {
+    if (hoveredCountryId && map.current) {
+      map.current.setFeatureState(
+        { source: 'countries', id: hoveredCountryId },
+        { hover: false }
+      );
+      setHoveredCountryId(null);
+    }
+  }, [hoveredCountryId]);
   
   // 地図初期化
   useEffect(() => {
@@ -106,7 +146,8 @@ const useMapInteraction = (containerRef) => {
       // 国境データの追加
       map.current.addSource('countries', {
         type: 'geojson',
-        data: 'https://raw.githubusercontent.com/datasets/geo-countries/master/data/countries.geojson'
+        data: 'https://raw.githubusercontent.com/datasets/geo-countries/master/data/countries.geojson',
+        promoteId: 'ISO_A2' // ISO_A2をプロモートIDとして使用（feature stateで使用）
       });
       
       // 国の塗りつぶし
@@ -117,11 +158,21 @@ const useMapInteraction = (containerRef) => {
         paint: {
           'fill-color': [
             'case',
-            ['in', ['get', 'ISO_A2'], ['literal', visitedPlaces.map(p => p.countryCodeISO).filter(Boolean)]],
-            '#ADD8E6',
-            'rgba(0, 0, 0, 0)'
+            ['boolean', ['feature-state', 'hover'], false],
+            '#69b3dd', // ホバー時の色
+            [
+              'case',
+              ['in', ['get', 'ISO_A2'], ['literal', visitedPlaces.map(p => p.countryCodeISO).filter(Boolean)]],
+              '#ADD8E6', // 訪問済み
+              'rgba(0, 0, 0, 0)' // デフォルト（透明）
+            ]
           ],
-          'fill-opacity': 0.7
+          'fill-opacity': [
+            'case',
+            ['boolean', ['feature-state', 'hover'], false],
+            0.8, // ホバー時の不透明度
+            0.7  // 通常時の不透明度
+          ]
         }
       });
       
@@ -134,6 +185,29 @@ const useMapInteraction = (containerRef) => {
           'line-color': '#627BC1',
           'line-width': 1
         }
+      });
+      
+      // マウスイベントハンドラー
+      map.current.on('mouseenter', 'countries-fill', handleCountryHighlight);
+      map.current.on('mouseleave', 'countries-fill', handleCountryUnhighlight);
+      map.current.on('mousemove', 'countries-fill', handleCountryHighlight);
+      
+      // タッチイベントのハンドラー（モバイル用）
+      map.current.on('touchstart', 'countries-fill', handleCountryHighlight);
+      map.current.on('touchend', 'countries-fill', (e) => {
+        // タッチが終了しても色をしばらく残す（500ms後に消す）
+        setTimeout(() => {
+          handleCountryUnhighlight();
+        }, 500);
+      });
+      
+      // カーソルスタイル変更
+      map.current.on('mouseenter', 'countries-fill', () => {
+        map.current.getCanvas().style.cursor = 'pointer';
+      });
+      
+      map.current.on('mouseleave', 'countries-fill', () => {
+        map.current.getCanvas().style.cursor = '';
       });
       
       // 地図クリックイベント
@@ -179,15 +253,6 @@ const useMapInteraction = (containerRef) => {
         }
       });
       
-      // マウスオーバーで色変更
-      map.current.on('mouseenter', 'countries-fill', () => {
-        map.current.getCanvas().style.cursor = 'pointer';
-      });
-      
-      map.current.on('mouseleave', 'countries-fill', () => {
-        map.current.getCanvas().style.cursor = '';
-      });
-      
       // 現在地に移動（データが読み込まれた後）
       if (userLocation) {
         map.current.flyTo({
@@ -208,12 +273,20 @@ const useMapInteraction = (containerRef) => {
     
     return () => {
       if (map.current) {
+        // イベントリスナーをクリーンアップ
+        if (map.current.getLayer('countries-fill')) {
+          map.current.off('mouseenter', 'countries-fill', handleCountryHighlight);
+          map.current.off('mouseleave', 'countries-fill', handleCountryUnhighlight);
+          map.current.off('mousemove', 'countries-fill', handleCountryHighlight);
+          map.current.off('touchstart', 'countries-fill', handleCountryHighlight);
+          map.current.off('touchend', 'countries-fill');
+        }
         map.current.remove();
         map.current = null;
       }
     };
     
-  }, [containerRef, visitedPlaces, userLocation, handleVisitButtonClick]);
+  }, [containerRef, visitedPlaces, userLocation, handleVisitButtonClick, handleCountryHighlight, handleCountryUnhighlight]);
   
   // 訪問地域データの変更をマップスタイルに反映
   useEffect(() => {
@@ -222,9 +295,14 @@ const useMapInteraction = (containerRef) => {
     try {
       map.current.setPaintProperty('countries-fill', 'fill-color', [
         'case',
-        ['in', ['get', 'ISO_A2'], ['literal', visitedPlaces.map(p => p.countryCodeISO).filter(Boolean)]],
-        '#ADD8E6',
-        'rgba(0, 0, 0, 0)'
+        ['boolean', ['feature-state', 'hover'], false],
+        '#69b3dd', // ホバー時の色
+        [
+          'case',
+          ['in', ['get', 'ISO_A2'], ['literal', visitedPlaces.map(p => p.countryCodeISO).filter(Boolean)]],
+          '#ADD8E6', // 訪問済み
+          'rgba(0, 0, 0, 0)' // デフォルト（透明）
+        ]
       ]);
     } catch (error) {
       console.error('マップスタイル更新エラー:', error);

@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { openDB } from 'idb';
 import Papa from 'papaparse';
+import { formatErrorMessage, logError, withErrorHandling } from '../utils/errorHandling';
 
 // IndexedDBのセットアップ
 const dbPromise = openDB('myWorldAtlasDB', 1, {
@@ -26,24 +27,44 @@ const useAtlasStore = create((set, get) => ({
   toast: { show: false, message: '', type: 'info' },
 
   // アクション：初期化
-  initializeStore: async () => {
+  initializeStore: withErrorHandling(async () => {
     set({ isLoading: true });
+    
     try {
       const db = await dbPromise;
       const visitedPlaces = await db.getAll('visitedPlaces');
       set({ visitedPlaces, isLoading: false });
     } catch (error) {
-      console.error('データ初期化エラー:', error);
-      set({ error: error.message, isLoading: false });
+      logError(error, { action: 'initializeStore' });
+      const errorMessage = formatErrorMessage(error, 'データの読み込みに失敗しました');
+      
+      set({ 
+        error: errorMessage, 
+        isLoading: false,
+        toast: {
+          show: true,
+          message: errorMessage,
+          type: 'error'
+        }
+      });
     }
-  },
+  }, (error) => {
+    set({ 
+      isLoading: false,
+      error: formatErrorMessage(error, 'データ初期化中にエラーが発生しました')
+    });
+  }),
 
   // アクション：地域の訪問をマーク
-  markPlaceAsVisited: async (placeData) => {
+  markPlaceAsVisited: withErrorHandling(async (placeData) => {
     const { uniqueId, placeName, adminLevel, countryCodeISO, regionCodeISO } = placeData;
     
     if (!uniqueId || !placeName || !adminLevel) {
-      set({ error: '必須情報が不足しています' });
+      const errorMsg = '必須情報が不足しています';
+      set({ 
+        error: errorMsg,
+        toast: { show: true, message: errorMsg, type: 'error' }
+      });
       return;
     }
     
@@ -88,21 +109,33 @@ const useAtlasStore = create((set, get) => ({
       }, 3000);
       
     } catch (error) {
-      console.error('データ保存エラー:', error);
+      logError(error, { action: 'markPlaceAsVisited', placeData });
+      const errorMessage = formatErrorMessage(error, '訪問地域の保存に失敗しました');
+      
       set({ 
-        error: error.message, 
+        error: errorMessage, 
         isLoading: false,
         toast: {
           show: true,
-          message: `エラーが発生しました: ${error.message}`,
+          message: errorMessage,
           type: 'error'
         }
       });
     }
-  },
+  }, (error) => {
+    set({ 
+      isLoading: false,
+      error: formatErrorMessage(error, '訪問記録中にエラーが発生しました'),
+      toast: {
+        show: true,
+        message: formatErrorMessage(error, '訪問記録中にエラーが発生しました'),
+        type: 'error'
+      }
+    });
+  }),
   
   // アクション：訪問の削除
-  removePlaceVisit: async (uniqueId) => {
+  removePlaceVisit: withErrorHandling(async (uniqueId) => {
     set({ isLoading: true });
     
     try {
@@ -133,10 +166,30 @@ const useAtlasStore = create((set, get) => ({
       }, 3000);
       
     } catch (error) {
-      console.error('データ削除エラー:', error);
-      set({ error: error.message, isLoading: false });
+      logError(error, { action: 'removePlaceVisit', uniqueId });
+      const errorMessage = formatErrorMessage(error, '訪問記録の削除に失敗しました');
+      
+      set({ 
+        error: errorMessage, 
+        isLoading: false,
+        toast: {
+          show: true,
+          message: errorMessage,
+          type: 'error'
+        }
+      });
     }
-  },
+  }, (error) => {
+    set({ 
+      isLoading: false,
+      error: formatErrorMessage(error, '削除中にエラーが発生しました'),
+      toast: {
+        show: true,
+        message: formatErrorMessage(error, '削除中にエラーが発生しました'),
+        type: 'error'
+      }
+    });
+  }),
   
   // アクション：選択地域の設定
   setSelectedPlace: (place) => set({ selectedPlace: place }),
@@ -157,7 +210,7 @@ const useAtlasStore = create((set, get) => ({
   },
   
   // アクション：CSVエクスポート
-  exportToCSV: () => {
+  exportToCSV: withErrorHandling(() => {
     const visitedPlaces = get().visitedPlaces;
     
     if (visitedPlaces.length === 0) {
@@ -165,35 +218,50 @@ const useAtlasStore = create((set, get) => ({
       return;
     }
     
-    // CSVデータの作成
-    const csvData = Papa.unparse({
-      fields: ['uniqueId', 'placeName', 'adminLevel', 'dateMarked', 'countryCodeISO', 'regionCodeISO'],
-      data: visitedPlaces
-    });
-    
-    // ファイル名の生成（YYYYMMDD形式）
-    const date = new Date();
-    const dateStr = `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}${String(date.getDate()).padStart(2, '0')}`;
-    const fileName = `MyWorldAtlas_Export_${dateStr}.csv`;
-    
-    // ダウンロード用のリンク作成
-    const blob = new Blob([csvData], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.setAttribute('href', url);
-    link.setAttribute('download', fileName);
-    link.style.visibility = 'hidden';
-    
-    // リンクをクリックしてダウンロード開始
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    
-    get().showToast('CSVファイルをエクスポートしました', 'success');
-  },
+    try {
+      // CSVデータの作成
+      const csvData = Papa.unparse({
+        fields: ['uniqueId', 'placeName', 'adminLevel', 'dateMarked', 'countryCodeISO', 'regionCodeISO'],
+        data: visitedPlaces
+      });
+      
+      // ファイル名の生成（YYYYMMDD形式）
+      const date = new Date();
+      const dateStr = `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}${String(date.getDate()).padStart(2, '0')}`;
+      const fileName = `MyWorldAtlas_Export_${dateStr}.csv`;
+      
+      // ダウンロード用のリンク作成
+      const blob = new Blob([csvData], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
+      link.setAttribute('download', fileName);
+      link.style.visibility = 'hidden';
+      
+      // リンクをクリックしてダウンロード開始
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      get().showToast('CSVファイルをエクスポートしました', 'success');
+    } catch (error) {
+      logError(error, { action: 'exportToCSV' });
+      const errorMessage = formatErrorMessage(error, 'エクスポートに失敗しました');
+      
+      get().showToast(errorMessage, 'error');
+      throw error; // エラーを再スロー
+    }
+  }, (error) => {
+    get().showToast(formatErrorMessage(error, 'エクスポート中にエラーが発生しました'), 'error');
+  }),
   
   // アクション：CSVインポート
-  importFromCSV: async (file) => {
+  importFromCSV: withErrorHandling(async (file) => {
+    if (!file) {
+      get().showToast('ファイルを選択してください', 'warning');
+      return;
+    }
+    
     set({ isLoading: true });
     
     try {
@@ -201,7 +269,9 @@ const useAtlasStore = create((set, get) => ({
       const text = await new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = (e) => resolve(e.target.result);
-        reader.onerror = reject;
+        reader.onerror = (e) => {
+          reject(new Error('ファイルの読み込みに失敗しました'));
+        };
         reader.readAsText(file);
       });
       
@@ -213,7 +283,8 @@ const useAtlasStore = create((set, get) => ({
       });
       
       if (errors.length > 0) {
-        throw new Error('CSVの解析中にエラーが発生しました');
+        throw new Error('CSVの解析中にエラーが発生しました: ' + 
+          errors.map(err => `行 ${err.row}: ${err.message}`).join(', '));
       }
       
       // データの検証
@@ -238,6 +309,7 @@ const useAtlasStore = create((set, get) => ({
           success++;
         } catch (e) {
           skipped++;
+          logError(e, { action: 'importFromCSV', row });
         }
       }
       
@@ -256,18 +328,30 @@ const useAtlasStore = create((set, get) => ({
       });
       
     } catch (error) {
-      console.error('インポートエラー:', error);
+      logError(error, { action: 'importFromCSV' });
+      const errorMessage = formatErrorMessage(error, 'インポートに失敗しました');
+      
       set({ 
-        error: error.message, 
+        error: errorMessage, 
         isLoading: false,
         toast: {
           show: true,
-          message: `インポートエラー: ${error.message}`,
+          message: errorMessage,
           type: 'error'
         }
       });
     }
-  }
+  }, (error) => {
+    set({ 
+      isLoading: false,
+      error: formatErrorMessage(error, 'インポート中にエラーが発生しました'),
+      toast: {
+        show: true,
+        message: formatErrorMessage(error, 'インポート中にエラーが発生しました'),
+        type: 'error'
+      }
+    });
+  })
 }));
 
 export default useAtlasStore;

@@ -29,6 +29,7 @@ const ImportForm = ({ isOpen, onClose, onSubmit }) => {
   return (
     <div 
       className="import-overlay" 
+      tabIndex="0" // 追加：キーボード操作のため
       onClick={handleOverlayClick} 
       onKeyDown={handleKeyDown}
       role="dialog"

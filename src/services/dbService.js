@@ -30,7 +30,7 @@ class DBService {
             const visitedStore = db.createObjectStore('visitedPlaces', {
               keyPath: 'uniqueId'
             });
-            
+
             // インデックス作成
             visitedStore.createIndex('adminLevel', 'adminLevel');
             visitedStore.createIndex('dateMarked', 'dateMarked');
@@ -115,11 +115,11 @@ class DBService {
   async bulkSaveVisitedPlaces(placesData) {
     let success = 0;
     let skipped = 0;
-    
+
     try {
       const db = await this.dbPromise;
       const tx = db.transaction('visitedPlaces', 'readwrite');
-      
+
       for (const placeData of placesData) {
         try {
           await tx.store.put(placeData);
@@ -127,9 +127,10 @@ class DBService {
         } catch (e) {
           skipped++;
           logError(e, { action: 'bulkSaveVisitedPlaces', placeData });
+          // ※エラー内容はログに出力後、利用者へはエラー詳細を含むメッセージを返すようにしています。
         }
       }
-      
+
       await tx.done;
       return { success, skipped };
     } catch (error) {

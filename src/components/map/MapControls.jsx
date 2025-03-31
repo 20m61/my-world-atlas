@@ -1,4 +1,5 @@
 import React from 'react';
+import './MapControls.css';
 
 const MapControls = ({ onExportClick, onImportClick, userLocation, onLocationClick }) => {
   return (

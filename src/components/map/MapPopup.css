@@ -1,0 +1,67 @@
+.map-popup {
+    padding: 8px 12px;
+    min-width: 160px;
+    max-width: 280px;
+    background-color: white;
+    border-radius: 4px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
+}
+
+.map-popup h3 {
+    margin: 0 0 10px 0;
+    font-size: 1.1rem;
+    text-align: center;
+    color: var(--primary-color);
+    font-weight: 600;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.mark-visited-btn {
+    background-color: var(--secondary-color);
+    color: white;
+    border: none;
+    padding: 8px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.95rem;
+    display: block;
+    width: 100%;
+    transition: background-color 0.2s, transform 0.1s;
+    font-weight: 500;
+}
+
+.mark-visited-btn:hover {
+    background-color: #2980b9;
+    transform: translateY(-1px);
+}
+
+.mark-visited-btn:active {
+    transform: translateY(1px);
+}
+
+/* モバイル用の調整 */
+@media (max-width: 768px) {
+    .map-popup {
+        min-width: 140px;
+        padding: 10px;
+    }
+
+    .mark-visited-btn {
+        padding: 10px 15px;
+        /* タッチしやすいようにボタンを大きく */
+        font-size: 1rem;
+    }
+}
+
+/* MapLibreのポップアップスタイル上書き */
+.maplibregl-popup-content {
+    padding: 0 !important;
+    overflow: hidden;
+}
+
+.maplibregl-popup-close-button {
+    font-size: 16px !important;
+    padding: 2px 6px !important;
+    color: var(--primary-color) !important;
+}

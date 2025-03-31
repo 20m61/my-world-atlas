@@ -14,11 +14,12 @@ const useMapInteraction = (containerRef) => {
   const [userLocation, setUserLocation] = useState(null);
   const [hoveredCountryId, setHoveredCountryId] = useState(null); // ホバー/タッチ中の国のID
   const [isMapReady, setIsMapReady] = useState(false); // 地図のロード状態を追跡
+  const [isTouchDevice, setIsTouchDevice] = useState(false); // タッチデバイス検出
 
-  const { 
-    visitedPlaces, 
-    markPlaceAsVisited, 
-    initializeStore 
+  const {
+    visitedPlaces,
+    markPlaceAsVisited,
+    initializeStore
   } = useAtlasStore();
 
   // ポップアップからの訪問登録処理
@@ -34,7 +35,10 @@ const useMapInteraction = (containerRef) => {
   useEffect(() => {
     console.log('ストアを初期化します');
     initializeStore();
-    
+
+    // タッチデバイスの検出
+    setIsTouchDevice('ontouchstart' in window || navigator.maxTouchPoints > 0);
+
     // 現在地の取得
     if ('geolocation' in navigator) {
       navigator.geolocation.getCurrentPosition(
@@ -53,18 +57,18 @@ const useMapInteraction = (containerRef) => {
       setUserLocation([139.7528, 35.6852]);
     }
   }, [initializeStore]);
-  
+
   // ハイライト表示のハンドラー
   const handleCountryHighlight = useCallback((e) => {
     if (!map.current || !isMapReady) return;
     if (!e.features || e.features.length === 0) return;
-    
+
     const feature = e.features[0];
     const countryId = feature.properties.ISO_A2;
-    
+
     // 以前と同じ国なら何もしない
     if (hoveredCountryId === countryId) return;
-    
+
     // 以前ハイライトされた国があれば、そのハイライトを削除
     if (hoveredCountryId) {
       try {
@@ -76,7 +80,7 @@ const useMapInteraction = (containerRef) => {
         console.error('ハイライト除去エラー:', err);
       }
     }
-    
+
     // 新しい国をハイライト
     try {
       map.current.setFeatureState(
@@ -87,14 +91,14 @@ const useMapInteraction = (containerRef) => {
     } catch (err) {
       console.error('ハイライト設定エラー:', err);
     }
-    
+
     setHoveredCountryId(countryId);
   }, [hoveredCountryId, isMapReady]);
-  
+
   // ハイライト解除のハンドラー
   const handleCountryUnhighlight = useCallback(() => {
     if (!map.current || !isMapReady || !hoveredCountryId) return;
-    
+
     try {
       map.current.setFeatureState(
         { source: 'countries', sourceLayer: '', id: hoveredCountryId },
@@ -104,20 +108,20 @@ const useMapInteraction = (containerRef) => {
     } catch (err) {
       console.error('ハイライト解除エラー:', err);
     }
-    
+
     setHoveredCountryId(null);
   }, [hoveredCountryId, isMapReady]);
-  
+
   // 地図クリック・タッチイベントハンドラー
   const handleCountryClick = useCallback((e) => {
     if (!map.current || !isMapReady) return;
     if (!e.features || e.features.length === 0) return;
-    
+
     const feature = e.features[0];
     const properties = feature.properties;
-    
+
     console.log('国がクリックされました:', properties.ADMIN);
-    
+
     // 選択地域の情報
     const placeInfo = {
       uniqueId: properties.ISO_A2,
@@ -125,9 +129,9 @@ const useMapInteraction = (containerRef) => {
       adminLevel: 'Country',
       countryCodeISO: properties.ISO_A2
     };
-    
+
     setSelectedFeature(placeInfo);
-    
+
     // 地域名をポップアップ表示 - カスタムHTMLを使用
     const popupHTML = `
       <div class="map-popup">
@@ -135,12 +139,12 @@ const useMapInteraction = (containerRef) => {
         <button class="mark-visited-btn" id="mark-visited-${properties.ISO_A2}">訪問済みにする</button>
       </div>
     `;
-    
+
     popup.current
       .setLngLat(e.lngLat)
       .setHTML(popupHTML)
       .addTo(map.current);
-    
+
     // ポップアップ表示後にボタンにイベントを追加 
     setTimeout(() => {
       const markBtn = document.getElementById(`mark-visited-${properties.ISO_A2}`);
@@ -154,16 +158,16 @@ const useMapInteraction = (containerRef) => {
       }
     }, 100);
   }, [handleVisitButtonClick, isMapReady]);
-  
+
   // 地図初期化
   useEffect(() => {
     if (map.current || !containerRef.current) return;
-    
+
     console.log('地図を初期化します');
-    
+
     // 初期座標（ユーザーの位置情報がまだない場合は日本）
     const initialCenter = userLocation || [139, 35];
-    
+
     map.current = new maplibregl.Map({
       container: containerRef.current,
       style: {
@@ -195,37 +199,47 @@ const useMapInteraction = (containerRef) => {
       touchZoomRotate: true,
       dragPan: true,
       doubleClickZoom: true,
-      touchPitch: true
+      touchPitch: true,
+      // モバイル用に慣性スクロールを改善
+      inertia: {
+        duration: 500, // 慣性の継続時間を短縮
+        speedFactor: 0.7 // スピードを少し下げる
+      }
     });
-    
-    // タッチ操作を有効化
+
+    // タッチ操作を有効化・改善
     map.current.touchZoomRotate.enable();
-    map.current.dragPan.enable();
-    
-    // ポップアップ作成
+    map.current.dragPan.enable({
+      inertia: true, // パン時の慣性を有効化
+      linearity: 0.3 // 操作の線形度（小さいほどよりなめらか）
+    });
+
+    // ポップアップ作成（モバイル対応）
     popup.current = new maplibregl.Popup({
       closeButton: false,
-      closeOnClick: true
+      closeOnClick: true,
+      anchor: 'bottom',
+      offset: [0, -10] // モバイル用にオフセット調整
     });
-    
+
     // 地図読み込み完了
     map.current.on('load', () => {
       console.log('地図が読み込まれました');
-      
+
       // 国境データの追加
       map.current.addSource('countries', {
         type: 'geojson',
         data: 'https://raw.githubusercontent.com/datasets/geo-countries/master/data/countries.geojson',
         generateId: true // 自動的にIDを生成し、フィーチャーステートを使用可能にする
       });
-      
+
       // 訪問済みの国リストを生成
       const visitedCountryCodes = visitedPlaces
         .filter(place => place.countryCodeISO)
         .map(place => place.countryCodeISO);
-        
+
       console.log('訪問済みの国リスト:', visitedCountryCodes);
-      
+
       // 国の塗りつぶしレイヤー
       map.current.addLayer({
         id: 'countries-fill',
@@ -251,7 +265,7 @@ const useMapInteraction = (containerRef) => {
           ]
         }
       });
-      
+
       // 国境線レイヤー
       map.current.addLayer({
         id: 'countries-outline',
@@ -262,30 +276,35 @@ const useMapInteraction = (containerRef) => {
           'line-width': 1
         }
       });
-      
-      // マウスイベントハンドラーを追加
-      map.current.on('mousemove', 'countries-fill', handleCountryHighlight);
-      map.current.on('mouseleave', 'countries-fill', handleCountryUnhighlight);
-      
-      // タッチイベントハンドラーを追加
-      map.current.on('touchstart', 'countries-fill', handleCountryHighlight);
-      map.current.on('touchend', 'countries-fill', (e) => {
-        // タッチ終了後にハイライトを暑く維持する
-        setTimeout(handleCountryUnhighlight, 1000);
-      });
-      
+
+      // マウスイベントとタッチイベントを分けて処理
+      if (isTouchDevice) {
+        // タッチデバイス用イベント
+        map.current.on('touchstart', 'countries-fill', handleCountryHighlight);
+        map.current.on('touchend', 'countries-fill', (e) => {
+          // タッチ終了後1秒間ハイライトを維持
+          setTimeout(handleCountryUnhighlight, 1000);
+        });
+      } else {
+        // マウス用イベント
+        map.current.on('mousemove', 'countries-fill', handleCountryHighlight);
+        map.current.on('mouseleave', 'countries-fill', handleCountryUnhighlight);
+      }
+
       // クリック/タップイベントハンドラーを追加
       map.current.on('click', 'countries-fill', handleCountryClick);
-      
-      // カーソルスタイル変更
-      map.current.on('mouseenter', 'countries-fill', () => {
-        map.current.getCanvas().style.cursor = 'pointer';
-      });
-      
-      map.current.on('mouseleave', 'countries-fill', () => {
-        map.current.getCanvas().style.cursor = '';
-      });
-      
+
+      // カーソルスタイル変更（マウスのみ）
+      if (!isTouchDevice) {
+        map.current.on('mouseenter', 'countries-fill', () => {
+          map.current.getCanvas().style.cursor = 'pointer';
+        });
+
+        map.current.on('mouseleave', 'countries-fill', () => {
+          map.current.getCanvas().style.cursor = '';
+        });
+      }
+
       // 現在地に移動（データが読み込まれた後）
       if (userLocation) {
         map.current.flyTo({
@@ -294,7 +313,7 @@ const useMapInteraction = (containerRef) => {
           speed: 1.5,
           curve: 1.5
         });
-        
+
         // 現在地のマーカー
         new maplibregl.Marker({
           color: '#e74c3c'
@@ -302,20 +321,23 @@ const useMapInteraction = (containerRef) => {
           .setLngLat(userLocation)
           .addTo(map.current);
       }
-      
+
       // 地図の準備完了をマーク
       setIsMapReady(true);
     });
-    
+
     // クリーンアップ関数
     return () => {
       if (map.current) {
         // イベントリスナーをクリーンアップ
         if (map.current.getLayer('countries-fill')) {
-          map.current.off('mousemove', 'countries-fill', handleCountryHighlight);
-          map.current.off('mouseleave', 'countries-fill', handleCountryUnhighlight);
-          map.current.off('touchstart', 'countries-fill', handleCountryHighlight);
-          map.current.off('touchend', 'countries-fill');
+          if (isTouchDevice) {
+            map.current.off('touchstart', 'countries-fill', handleCountryHighlight);
+            map.current.off('touchend', 'countries-fill');
+          } else {
+            map.current.off('mousemove', 'countries-fill', handleCountryHighlight);
+            map.current.off('mouseleave', 'countries-fill', handleCountryUnhighlight);
+          }
           map.current.off('click', 'countries-fill', handleCountryClick);
         }
         map.current.remove();
@@ -323,21 +345,21 @@ const useMapInteraction = (containerRef) => {
         setIsMapReady(false);
       }
     };
-    
-  }, [containerRef, visitedPlaces, userLocation, handleVisitButtonClick, handleCountryHighlight, handleCountryUnhighlight, handleCountryClick]);
-  
+
+  }, [containerRef, visitedPlaces, userLocation, handleVisitButtonClick, handleCountryHighlight, handleCountryUnhighlight, handleCountryClick, isTouchDevice]);
+
   // 訪問地域データの変更をマップスタイルに反映
   useEffect(() => {
     if (!map.current || !isMapReady || !map.current.getLayer('countries-fill')) return;
-    
+
     try {
       // 訪問済みの国リストを生成
       const visitedCountryCodes = visitedPlaces
         .filter(place => place.countryCodeISO)
         .map(place => place.countryCodeISO);
-        
+
       console.log('訪問済み国リストを更新しました:', visitedCountryCodes);
-      
+
       // 塗りつぶしの色設定を更新
       map.current.setPaintProperty('countries-fill', 'fill-color', [
         'case',
@@ -353,13 +375,13 @@ const useMapInteraction = (containerRef) => {
     } catch (error) {
       console.error('マップスタイル更新エラー:', error);
     }
-    
+
   }, [visitedPlaces, isMapReady]);
 
   // 現在地に移動する関数
   const flyToUserLocation = useCallback(() => {
     if (!map.current || !userLocation) return;
-    
+
     map.current.flyTo({
       center: userLocation,
       zoom: 5,
@@ -371,7 +393,8 @@ const useMapInteraction = (containerRef) => {
     map,
     selectedFeature,
     userLocation,
-    flyToUserLocation
+    flyToUserLocation,
+    isTouchDevice
   };
 };
 

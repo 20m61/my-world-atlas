@@ -7,58 +7,18 @@
 
 .map-container {
   width: 100%;
-  height: calc(100vh - 70px); /* ヘッダーの高さ分調整 */
+  height: calc(100vh - var(--header-height));
+  /* ヘッダーの高さを変数で指定 */
   position: relative;
   overflow: hidden;
-  touch-action: manipulation; /* ピンチズームを許可するが、パン/スクロールは防止 */
-}
-
-/* スクロールバーを非表示にする */
-body {
   overflow: hidden;
+  touch-action: manipulation;
+  /* ピンチズームを許可するが、パン/スクロールは防止 */
 }
 
-.map-controls {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  z-index: 10;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.map-control-button {
-  width: 40px;
-  height: 40px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background-color: white;
-  border: none;
-  border-radius: 4px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-  cursor: pointer;
-  transition: background-color 0.2s;
-}
-
-.map-control-button:hover {
-  background-color: #f5f5f5;
-}
-
-/* マテリアルアイコン用スタイル */
-.material-icons {
-  font-family: 'Material Icons';
-  font-weight: normal;
-  font-style: normal;
-  font-size: 24px;
-  line-height: 1;
-  letter-spacing: normal;
-  text-transform: none;
-  display: inline-block;
-  white-space: nowrap;
-  word-wrap: normal;
-  direction: ltr;
+/* スクロールバーを非表示にする (MapView表示時のみ) */
+.map-view-active body {
+  overflow: hidden;
 }
 
 /* マップポップアップ */
@@ -97,66 +57,21 @@ body {
 
 /* ハイライト効果のアニメーション */
 @keyframes highlight-pulse {
-  0% { opacity: 0.7; }
-  50% { opacity: 0.9; }
-  100% { opacity: 0.7; }
+  0% {
+    opacity: 0.7;
+  }
+
+  50% {
+    opacity: 0.9;
+  }
+
+  100% {
+    opacity: 0.7;
+  }
 }
 
 .country-highlight {
   animation: highlight-pulse 1.5s infinite ease-in-out;
-}
-
-/* インポート画面 */
-.import-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 100;
-}
-
-.import-container {
-  background-color: white;
-  padding: 20px;
-  border-radius: 4px;
-  width: 100%;
-  max-width: 500px;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
-}
-
-.import-container h3 {
-  margin: 0 0 20px 0;
-  font-size: 1.2rem;
-}
-
-.form-group {
-  margin-bottom: 15px;
-}
-
-.form-group label {
-  display: block;
-  margin-bottom: 5px;
-  font-weight: 500;
-}
-
-.form-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  margin-top: 20px;
-}
-
-.btn-secondary {
-  background-color: #95a5a6;
-}
-
-.btn-secondary:hover {
-  background-color: #7f8c8d;
 }
 
 /* モバイル用の調整 */
@@ -165,21 +80,18 @@ body {
     padding: 15px;
     width: 90%;
   }
-  
+
   .map-control-button {
     width: 36px;
     height: 36px;
   }
-  
-  .material-icons {
-    font-size: 20px;
-  }
-  
+
   .mark-visited-btn {
-    padding: 10px 15px; /* タッチしやすいようにボタンを大きく */
+    padding: 10px 15px;
+    /* タッチしやすいようにボタンを大きく */
     font-size: 1rem;
   }
-  
+
   .map-popup {
     padding: 10px;
   }

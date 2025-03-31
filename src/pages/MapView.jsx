@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import useAtlasStore from '../store/useAtlasStore';
 import useMapInteraction from '../hooks/useMapInteraction';
 import MapControls from '../components/map/MapControls';
@@ -35,6 +35,15 @@ function MapView() {
     setImportOpen(false);
   };
   
+  // MapViewが表示されている間だけbodyにクラスを追加
+  useEffect(() => {
+    document.body.classList.add('map-view-active');
+    // クリーンアップ関数：コンポーネントがアンマウントされた時にクラスを削除
+    return () => {
+      document.body.classList.remove('map-view-active');
+    };
+  }, []); // 空の依存配列で、マウント時とアンマウント時にのみ実行
+
   return (
     <div className="map-view">
       <div ref={mapContainer} className="map-container" />

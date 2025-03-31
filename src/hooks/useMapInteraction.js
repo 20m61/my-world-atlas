@@ -114,12 +114,10 @@ const useMapInteraction = (containerRef) => {
 
   // 地図クリック・タッチイベントハンドラー
   const handleCountryClick = useCallback((e) => {
-    if (!map.current || !isMapReady) return;
-    if (!e.features || e.features.length === 0) return;
+    if (!map.current || !isMapReady || !e.features || e.features.length === 0) return;
 
     const feature = e.features[0];
     const properties = feature.properties;
-
     console.log('国がクリックされました:', properties.ADMIN);
 
     // 選択地域の情報
@@ -129,14 +127,15 @@ const useMapInteraction = (containerRef) => {
       adminLevel: 'Country',
       countryCodeISO: properties.ISO_A2
     };
-
     setSelectedFeature(placeInfo);
 
-    // 地域名をポップアップ表示 - カスタムHTMLを使用
+    // ポップアップ表示用HTML（アクセシビリティも考慮）
     const popupHTML = `
       <div class="map-popup">
         <h3>${properties.ADMIN}</h3>
-        <button class="mark-visited-btn" id="mark-visited-${properties.ISO_A2}">訪問済みにする</button>
+        <button class="mark-visited-btn" id="mark-visited-${properties.ISO_A2}" aria-label="${properties.ADMIN}を訪問済みにする">
+          訪問済みにする
+        </button>
       </div>
     `;
 
@@ -145,9 +144,10 @@ const useMapInteraction = (containerRef) => {
       .setHTML(popupHTML)
       .addTo(map.current);
 
-    // ポップアップ表示後にボタンにイベントを追加 
-    setTimeout(() => {
-      const markBtn = document.getElementById(`mark-visited-${properties.ISO_A2}`);
+    // DOM更新後にイベント登録（requestAnimationFrameで遅延）
+    requestAnimationFrame(() => {
+      const popupEl = popup.current.getElement();
+      const markBtn = popupEl.querySelector(`#mark-visited-${properties.ISO_A2}`);
       if (markBtn) {
         markBtn.addEventListener('click', () => {
           console.log('訪問済みボタンがクリックされました:', placeInfo);
@@ -156,7 +156,7 @@ const useMapInteraction = (containerRef) => {
       } else {
         console.error('訪問済みボタンが見つかりません');
       }
-    }, 100);
+    });
   }, [handleVisitButtonClick, isMapReady]);
 
   // 地図初期化・イベント登録（依存値なしで1度のみ実行）

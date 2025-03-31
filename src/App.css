@@ -1,3 +1,8 @@
+@import "maplibre-gl/dist/maplibre-gl.css";
+
+/* MapLibre GL CSSをインポート */
+/* マップコントロールのスタイルは現在MapView.cssに定義されています */
+
 .app {
   display: flex;
   flex-direction: column;
@@ -11,11 +16,6 @@
   position: relative;
   overflow: hidden;
 }
-
-/* MapLibre GL CSSをインポート */
-@import "maplibre-gl/dist/maplibre-gl.css";
-
-/* マップコントロールのスタイルは現在MapView.cssに定義されています */
 
 /* リストビューのコンテンツが一覧表示ページでのみスクロール可能になるよう設定 */
 .list-view {

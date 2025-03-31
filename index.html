@@ -1,16 +1,29 @@
 <!DOCTYPE html>
 <html lang="ja">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/my-world-atlas/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=10.0, user-scalable=yes" />
-    <meta name="description" content="旅行や生活の記録を、地理的に楽しく・視覚的に管理できるWebアプリケーション" />
-    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
-    <title>My World Atlas</title>
-    <script type="module" crossorigin src="/my-world-atlas/assets/index-Bs7OIrRo.js"></script>
-    <link rel="stylesheet" crossorigin href="/my-world-atlas/assets/index-Dzt_Nic3.css">
-  </head>
-  <body>
-    <div id="root"></div>
-  </body>
+
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/svg+xml" href="/my-world-atlas/favicon.svg" />
+  <meta name="viewport" content="width=device-width, maximum-scale=5.0, user-scalable=yes" />
+  <meta name="description" content="旅行や生活の記録を、地理的に楽しく・視覚的に管理できるWebアプリケーション" />
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+  <title>My World Atlas</title>
+  <script>
+    // GitHub Pagesでのリダイレクト処理
+    (function () {
+      var redirect = sessionStorage.redirect;
+      delete sessionStorage.redirect;
+      if (redirect && redirect != location.href) {
+        history.replaceState(null, null, redirect);
+      }
+    })();
+  </script>
+  <script type="module" crossorigin src="/my-world-atlas/assets/js/index-CME75PDw.js"></script>
+  <link rel="stylesheet" crossorigin href="/my-world-atlas/assets/css/index-Ub4_3SfY.css">
+</head>
+
+<body>
+  <div id="root"></div>
+</body>
+
 </html>

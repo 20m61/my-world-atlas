@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from '@jest/globals';
 
 test('ナビゲーションメニューが機能すること', async ({ page }) => {
   await page.goto('/');

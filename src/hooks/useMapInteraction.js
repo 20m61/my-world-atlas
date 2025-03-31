@@ -159,7 +159,7 @@ const useMapInteraction = (containerRef) => {
     }, 100);
   }, [handleVisitButtonClick, isMapReady]);
 
-  // 地図初期化
+  // 地図初期化・イベント登録（依存値なしで1度のみ実行）
   useEffect(() => {
     if (map.current || !containerRef.current) return;
 
@@ -226,104 +226,82 @@ const useMapInteraction = (containerRef) => {
     map.current.on('load', () => {
       console.log('地図が読み込まれました');
 
-      // 国境データの追加
-      map.current.addSource('countries', {
-        type: 'geojson',
-        data: 'https://raw.githubusercontent.com/datasets/geo-countries/master/data/countries.geojson',
-        generateId: true // 自動的にIDを生成し、フィーチャーステートを使用可能にする
-      });
+      // 国境データの取得と各フィーチャーにid（ISO_A2）を付与
+      fetch('https://raw.githubusercontent.com/datasets/geo-countries/master/data/countries.geojson')
+        .then(response => response.json())
+        .then(data => {
+          // 各フィーチャーにidプロパティをISO_A2に設定
+          data.features = data.features.map(feature => ({
+            ...feature,
+            id: feature.properties.ISO_A2
+          }));
+          // ソース追加（generateIdは不要）
+          map.current.addSource('countries', {
+            type: 'geojson',
+            data: data
+          });
 
-      // 訪問済みの国リストを生成
-      const visitedCountryCodes = visitedPlaces
-        .filter(place => place.countryCodeISO)
-        .map(place => place.countryCodeISO);
+          // 国フィルレイヤーの追加
+          map.current.addLayer({
+            id: 'countries-fill',
+            type: 'fill',
+            source: 'countries',
+            paint: {
+              'fill-color': [
+                'case',
+                ['boolean', ['feature-state', 'hover'], false],
+                'rgba(105,179,221, 0.6)', // ホバー時
+                [
+                  'case',
+                  ['in', ['get', 'ISO_A2'], ['literal', visitedPlaces.map(p => p.countryCodeISO)]],
+                  '#ADD8E6', // 訪問済み
+                  'rgba(0, 0, 0, 0.01)' // ほぼ透明にしてイベント検出を可能にする
+                ]
+              ],
+              'fill-opacity': 1  // 明示的に設定
+            }
+          });
 
-      console.log('訪問済みの国リスト:', visitedCountryCodes);
+          // イベントハンドラー登録（タッチ/マウス別々に登録）
+          if (navigator.maxTouchPoints > 0) {
+            map.current.on('touchstart', 'countries-fill', handleCountryHighlight);
+            map.current.on('touchend', 'countries-fill', () => {
+              setTimeout(handleCountryUnhighlight, 1000);
+            });
+          } else {
+            map.current.on('mousemove', 'countries-fill', handleCountryHighlight);
+            map.current.on('mouseleave', 'countries-fill', handleCountryUnhighlight);
+          }
+          map.current.on('click', 'countries-fill', handleCountryClick);
 
-      // 国の塗りつぶしレイヤー
-      map.current.addLayer({
-        id: 'countries-fill',
-        type: 'fill',
-        source: 'countries',
-        paint: {
-          'fill-color': [
-            'case',
-            ['boolean', ['feature-state', 'hover'], false],
-            '#69b3dd', // ホバー時の色
-            [
-              'case',
-              ['in', ['get', 'ISO_A2'], ['literal', visitedCountryCodes]],
-              '#ADD8E6', // 訪問済み
-              'rgba(0, 0, 0, 0)' // デフォルト（透明）
-            ]
-          ],
-          'fill-opacity': [
-            'case',
-            ['boolean', ['feature-state', 'hover'], false],
-            0.9, // ホバー時の不透明度
-            0.7  // 通常時の不透明度
-          ]
-        }
-      });
+          // カーソル変更（マウスのみ）
+          if (navigator.maxTouchPoints === 0) {
+            map.current.on('mouseenter', 'countries-fill', () => {
+              map.current.getCanvas().style.cursor = 'pointer';
+            });
+            map.current.on('mouseleave', 'countries-fill', () => {
+              map.current.getCanvas().style.cursor = '';
+            });
+          }
 
-      // 国境線レイヤー
-      map.current.addLayer({
-        id: 'countries-outline',
-        type: 'line',
-        source: 'countries',
-        paint: {
-          'line-color': '#627BC1',
-          'line-width': 1
-        }
-      });
+          // 現在地に移動およびマーカー設置
+          if (userLocation) {
+            map.current.flyTo({
+              center: userLocation,
+              zoom: 5,
+              speed: 1.5
+            });
+            new maplibregl.Marker({ color: '#e74c3c' })
+              .setLngLat(userLocation)
+              .addTo(map.current);
+          }
 
-      // マウスイベントとタッチイベントを分けて処理
-      if (isTouchDevice) {
-        // タッチデバイス用イベント
-        map.current.on('touchstart', 'countries-fill', handleCountryHighlight);
-        map.current.on('touchend', 'countries-fill', (e) => {
-          // タッチ終了後1秒間ハイライトを維持
-          setTimeout(handleCountryUnhighlight, 1000);
-        });
-      } else {
-        // マウス用イベント
-        map.current.on('mousemove', 'countries-fill', handleCountryHighlight);
-        map.current.on('mouseleave', 'countries-fill', handleCountryUnhighlight);
-      }
-
-      // クリック/タップイベントハンドラーを追加
-      map.current.on('click', 'countries-fill', handleCountryClick);
-
-      // カーソルスタイル変更（マウスのみ）
-      if (!isTouchDevice) {
-        map.current.on('mouseenter', 'countries-fill', () => {
-          map.current.getCanvas().style.cursor = 'pointer';
-        });
-
-        map.current.on('mouseleave', 'countries-fill', () => {
-          map.current.getCanvas().style.cursor = '';
-        });
-      }
-
-      // 現在地に移動（データが読み込まれた後）
-      if (userLocation) {
-        map.current.flyTo({
-          center: userLocation,
-          zoom: 5,
-          speed: 1.5,
-          curve: 1.5
-        });
-
-        // 現在地のマーカー
-        new maplibregl.Marker({
-          color: '#e74c3c'
+          // 地図の準備完了をマーク
+          setIsMapReady(true);
         })
-          .setLngLat(userLocation)
-          .addTo(map.current);
-      }
-
-      // 地図の準備完了をマーク
-      setIsMapReady(true);
+        .catch(error => {
+          console.error('国境データの読み込みエラー:', error);
+        });
     });
 
     // クリーンアップ関数
@@ -331,13 +309,8 @@ const useMapInteraction = (containerRef) => {
       if (map.current) {
         // イベントリスナーをクリーンアップ
         if (map.current.getLayer('countries-fill')) {
-          if (isTouchDevice) {
-            map.current.off('touchstart', 'countries-fill', handleCountryHighlight);
-            map.current.off('touchend', 'countries-fill');
-          } else {
-            map.current.off('mousemove', 'countries-fill', handleCountryHighlight);
-            map.current.off('mouseleave', 'countries-fill', handleCountryUnhighlight);
-          }
+          map.current.off('mousemove', 'countries-fill', handleCountryHighlight);
+          map.current.off('mouseleave', 'countries-fill', handleCountryUnhighlight);
           map.current.off('click', 'countries-fill', handleCountryClick);
         }
         map.current.remove();
@@ -346,7 +319,7 @@ const useMapInteraction = (containerRef) => {
       }
     };
 
-  }, [containerRef, visitedPlaces, userLocation, handleVisitButtonClick, handleCountryHighlight, handleCountryUnhighlight, handleCountryClick, isTouchDevice]);
+  }, [containerRef]);
 
   // 訪問地域データの変更をマップスタイルに反映
   useEffect(() => {
@@ -361,19 +334,21 @@ const useMapInteraction = (containerRef) => {
       console.log('訪問済み国リストを更新しました:', visitedCountryCodes);
 
       // 塗りつぶしの色設定を更新
+      const defaultColorExpression = [
+        'case',
+        ['in', ['get', 'ISO_A2'], ['literal', visitedCountryCodes]],
+        '#ADD8E6', // 訪問済み
+        'rgba(0, 0, 0, 0)' // デフォルト（透明）
+      ];
+
       map.current.setPaintProperty('countries-fill', 'fill-color', [
         'case',
         ['boolean', ['feature-state', 'hover'], false],
-        '#69b3dd', // ホバー時の色
-        [
-          'case',
-          ['in', ['get', 'ISO_A2'], ['literal', visitedCountryCodes]],
-          '#ADD8E6', // 訪問済み
-          'rgba(0, 0, 0, 0)' // デフォルト（透明）
-        ]
+        'rgba(105,179,221, 0.6)', // ホバー時のオーバーレイ色
+        defaultColorExpression // それ以外の場合の既存スタイル
       ]);
     } catch (error) {
-      console.error('マップスタイル更新エラー:', error);
+      console.error('ホバー用スタイル更新エラー:', error);
     }
 
   }, [visitedPlaces, isMapReady]);
